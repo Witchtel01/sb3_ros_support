@@ -5,7 +5,7 @@ import torch as th
 import stable_baselines3
 
 # ROS packages required
-import rospy
+import rclpy
 
 # Noise
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
@@ -14,6 +14,8 @@ from stable_baselines3.common.env_checker import check_env
 # Callbacks
 from stable_baselines3.common.callbacks import BaseCallback
 import time
+
+import rclpy.logging
 
 
 def get_policy_kwargs(parm_dict: dict) -> dict:
@@ -39,7 +41,7 @@ def get_policy_kwargs(parm_dict: dict) -> dict:
         elif activation_function == "selu":
             activation_fn = th.nn.SELU
         else:
-            rospy.logwarn("Activation function not found, using ReLU")
+            rclpy.logging.get_logger().info("Activation function not found, using ReLU")
             activation_fn = th.nn.ReLU
 
         # Feature extractor for the policy
@@ -51,7 +53,7 @@ def get_policy_kwargs(parm_dict: dict) -> dict:
         elif feature_extractor == "CombinedExtractor":
             features_extractor_class = stable_baselines3.common.torch_layers.CombinedExtractor
         else:
-            rospy.logwarn("Feature extractor not found, using FlattenExtractor")
+            rclpy.logging.get_logger().info("Feature extractor not found, using FlattenExtractor")
             features_extractor_class = stable_baselines3.common.torch_layers.FlattenExtractor
 
         # Optimizer for the policy
@@ -67,7 +69,7 @@ def get_policy_kwargs(parm_dict: dict) -> dict:
         elif optimizer_class == "Adadelta":
             optimizer_class = th.optim.Adadelta
         else:
-            rospy.logwarn("Optimizer not found, using Adam")
+            rclpy.logging.get_logger().info("Optimizer not found, using Adam")
             optimizer_class = th.optim.Adam
 
         # Net Archiecture for the policy
@@ -77,7 +79,7 @@ def get_policy_kwargs(parm_dict: dict) -> dict:
                              optimizer_class=optimizer_class, net_arch=net_arch)
 
         # log
-        rospy.logwarn(policy_kwargs)
+        rclpy.logging.get_logger().info(policy_kwargs)
         print(policy_kwargs)
     else:
         policy_kwargs = None
@@ -100,7 +102,7 @@ def get_action_noise(action_space_shape, parm_dict: dict, action_noise_type="nor
 
     action_noise = None
     if parm_dict["use_action_noise"] is None:
-        rospy.loginfo("Parameter use_action_noise was not found")
+        rclpy.logging.get_logger().info("Parameter use_action_noise was not found")
         return action_noise
 
     if parm_dict["use_action_noise"] is True:

@@ -2,19 +2,20 @@
 
 import os
 import stable_baselines3
+import rclpy.logging
 from sb3_ros_support import core
 from sb3_ros_support.utils import yaml_utils
 
 # ROS packages required
-import rospy
+import rclpy
 import rospkg
 
 
-class A2C(core.BasicModel):
+class PPO(core.BasicModel):
     """
-    Advantage Actor-Critic (A2C) algorithm.
+    Proximal Policy Optimization (PPO) algorithm.
 
-    Paper: https://arxiv.org/abs/1602.01783
+    Paper: https://arxiv.org/abs/1707.06347
     """
 
     def __init__(self, env, save_model_path, log_path, model_pkg_path=None, load_trained=False,
@@ -32,8 +33,8 @@ class A2C(core.BasicModel):
             abs_config_path (str): The absolute path to the config file. Required if config_file_pkg and config_filename are not provided.
         """
 
-        rospy.loginfo("Init A2C Policy")
-        print("Init A2C Policy")
+        rclpy.logging.get_logger().info("Init PPO Policy")
+        print("Init PPO Policy")
 
         # --- Set the environment
         self.env = env
@@ -69,14 +70,14 @@ class A2C(core.BasicModel):
         parm_dict = yaml_utils.load_yaml(pkg_name=config_file_pkg, file_name=config_filename,
                                          file_abs_path=abs_config_path)
 
-        # --- Init superclass
+        # --- Init super class
         super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained, action_noise=False)
 
         if load_trained:
-            rospy.logwarn("Loading trained model")
-            self.model = stable_baselines3.A2C.load(load_model_path, env=env)
+            rclpy.logging.get_logger().info("Loading trained model")
+            self.model = stable_baselines3.PPO.load(load_model_path, env=env)
         else:
-            # --- SDE for A2C
+            # --- SDE for PPO
             if parm_dict["use_sde"]:
                 model_sde = True
                 model_sde_sample_freq = parm_dict["sde_params"]["sde_sample_freq"]
@@ -85,18 +86,18 @@ class A2C(core.BasicModel):
                 model_sde = False
                 model_sde_sample_freq = -1
 
-            # --- A2C model parameters
-            model_learning_rate = parm_dict["a2c_params"]["learning_rate"]
-            model_n_steps = parm_dict["a2c_params"]["n_steps"]
-            model_gamma = parm_dict["a2c_params"]["gamma"]
-            model_gae_lambda = parm_dict["a2c_params"]["gae_lambda"]
-            model_ent_coef = parm_dict["a2c_params"]["ent_coef"]
-            model_vf_coef = parm_dict["a2c_params"]["vf_coef"]
-            model_max_grad_norm = parm_dict["a2c_params"]["max_grad_norm"]
-            model_use_rms_prop = parm_dict["a2c_params"]["use_rms_prop"]
-            model_rms_prop_eps = parm_dict["a2c_params"]["rms_prop_eps"]
-            model_norm_advant = parm_dict["a2c_params"]["normalize_advantage"]
-            model_seed = parm_dict["a2c_params"]["seed"]
+            # --- PPO model parameters
+            model_learning_rate = parm_dict["ppo_params"]["learning_rate"]
+            model_n_steps = parm_dict["ppo_params"]["n_steps"]
+            model_batch_size = parm_dict["ppo_params"]["batch_size"]
+            model_n_epochs = parm_dict["ppo_params"]["n_epochs"]
+            model_gamma = parm_dict["ppo_params"]["gamma"]
+            model_gae_lambda = parm_dict["ppo_params"]["gae_lambda"]
+            model_clip_range = parm_dict["ppo_params"]["clip_range"]
+            model_ent_coef = parm_dict["ppo_params"]["ent_coef"]
+            model_vf_coef = parm_dict["ppo_params"]["vf_coef"]
+            model_max_grad_norm = parm_dict["ppo_params"]["max_grad_norm"]
+            model_seed = parm_dict["ppo_params"]["seed"]
 
             # --- Create or load model
             if parm_dict["load_model"]:  # Load model
@@ -104,35 +105,35 @@ class A2C(core.BasicModel):
 
                 assert os.path.exists(save_model_path + model_name + ".zip"), "Model {} doesn't exist".format(
                     model_name)
-                rospy.logwarn("Loading model: " + model_name)
+                rclpy.logging.get_logger().info("Loading model: " + model_name)
 
-                self.model = stable_baselines3.A2C.load(save_model_path + model_name, env=env, verbose=1,
+                self.model = stable_baselines3.PPO.load(save_model_path + model_name, env=env, verbose=1,
                                                         learning_rate=model_learning_rate,
-                                                        n_steps=model_n_steps, gamma=model_gamma,
-                                                        gae_lambda=model_gae_lambda, ent_coef=model_ent_coef,
-                                                        vf_coef=model_vf_coef, max_grad_norm=model_max_grad_norm,
                                                         use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
-                                                        use_rms_prop=model_use_rms_prop,
-                                                        rms_prop_eps=model_rms_prop_eps,
-                                                        normalize_advantage=model_norm_advant,
+                                                        n_steps=model_n_steps, batch_size=model_batch_size,
+                                                        n_epochs=model_n_epochs, gamma=model_gamma,
+                                                        gae_lambda=model_gae_lambda, clip_range=model_clip_range,
+                                                        ent_coef=model_ent_coef,
+                                                        vf_coef=model_vf_coef, max_grad_norm=model_max_grad_norm,
                                                         seed=model_seed)
 
                 if os.path.exists(save_model_path + model_name + "_replay_buffer.pkl"):
-                    rospy.logwarn("Loading replay buffer")
+                    rclpy.logging.get_logger().info("Loading replay buffer")
                     self.model.load_replay_buffer(save_model_path + model_name + "_replay_buffer")
                 else:
-                    rospy.logwarn("No replay buffer found")
+                    rclpy.logging.get_logger().info("No replay buffer found")
 
             else:  # Create new model
-                rospy.logwarn("Creating new model")
-                self.model = stable_baselines3.A2C("MlpPolicy", env, verbose=1, policy_kwargs=self.policy_kwargs,
-                                                   learning_rate=model_learning_rate, n_steps=model_n_steps,
-                                                   gamma=model_gamma,
-                                                   gae_lambda=model_gae_lambda, ent_coef=model_ent_coef,
-                                                   vf_coef=model_vf_coef, max_grad_norm=model_max_grad_norm,
+                rclpy.logging.get_logger().info("Creating new model")
+
+                self.model = stable_baselines3.PPO("MlpPolicy", env, verbose=1, learning_rate=model_learning_rate,
                                                    use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
-                                                   use_rms_prop=model_use_rms_prop, rms_prop_eps=model_rms_prop_eps,
-                                                   normalize_advantage=model_norm_advant,
+                                                   n_steps=model_n_steps, batch_size=model_batch_size,
+                                                   n_epochs=model_n_epochs, gamma=model_gamma,
+                                                   gae_lambda=model_gae_lambda, clip_range=model_clip_range,
+                                                   ent_coef=model_ent_coef,
+                                                   policy_kwargs=self.policy_kwargs, vf_coef=model_vf_coef,
+                                                   max_grad_norm=model_max_grad_norm,
                                                    seed=model_seed)
 
             # --- Logger
@@ -157,14 +158,14 @@ class A2C(core.BasicModel):
 
         if config_file_pkg is None and config_filename is None and abs_config_path is None:
             config_file_pkg = "sb3_ros_support"
-            config_filename = "a2c.yaml"
+            config_filename = "ppo.yaml"
 
-            rospy.logwarn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
+            rclpy.logging.get_logger().info("Using default config file: " + config_filename + " from package: " + config_file_pkg)
 
         elif model_pkg is not None and config_filename is not None and config_file_pkg is None:
             config_file_pkg = model_pkg
 
-        model = A2C(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
+        model = PPO(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
                     load_trained=True, load_model_path=model_path, config_file_pkg=config_file_pkg,
                     config_filename=config_filename, abs_config_path=abs_config_path)
 

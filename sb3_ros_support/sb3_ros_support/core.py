@@ -9,10 +9,11 @@ Recreated to overcome the following errors:
 """
 import os
 from datetime import datetime
+import rclpy.logging
 from sb3_ros_support.utils.sb3_common import get_policy_kwargs, get_action_noise, test_env, TimeLimitCallback
 
 # ROS packages required
-import rospy
+import rclpy
 
 # SB3 Callbacks
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -113,7 +114,7 @@ class BasicModel:
             now = datetime.now()
             dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
             self.save_trained_model_path = self.save_trained_model_path + "_" + dt_string
-            rospy.logwarn("Trained model name already exists, saving as: " + trained_model_name + "_" + dt_string)
+            rclpy.logging.get_logger().info("Trained model name already exists, saving as: " + trained_model_name + "_" + dt_string)
 
         self.model.save(self.save_trained_model_path)
         self.save_replay_buffer()
@@ -132,7 +133,7 @@ class BasicModel:
             raise ValueError("Model not trained yet, cannot save replay buffer")
 
         if self.parm_dict["save_replay_buffer"]:
-            rospy.logwarn("Saving replay buffer")
+            rclpy.logging.get_logger().info("Saving replay buffer")
             self.model.save_replay_buffer(self.save_trained_model_path + '_replay_buffer')
 
     def set_model_logger(self) -> bool:

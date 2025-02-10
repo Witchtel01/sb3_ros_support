@@ -4,11 +4,12 @@ import os
 
 import rospkg
 import stable_baselines3
+import rclpy.logging
 from sb3_ros_support import core
 from sb3_ros_support.utils import yaml_utils
 
 # ROS packages required
-import rospy
+import rclpy
 
 
 class DDPG_GOAL(core.BasicModel):
@@ -35,7 +36,7 @@ class DDPG_GOAL(core.BasicModel):
             use_her (bool): Whether to use Hindsight Experience Replay or not.
         """
 
-        rospy.loginfo("Init DDPG MultiInputPolicy")
+        rclpy.logging.get_logger().info("Init DDPG MultiInputPolicy")
         print("Init DDPG MultiInputPolicy")
 
         # --- Set the environment
@@ -76,7 +77,7 @@ class DDPG_GOAL(core.BasicModel):
         super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained)
 
         if load_trained:
-            rospy.logwarn("Loading trained model")
+            rclpy.logging.get_logger().info("Loading trained model")
             self.model = stable_baselines3.DDPG.load(load_model_path, env=env)
         else:
             # --- DDPG model parameters
@@ -97,7 +98,7 @@ class DDPG_GOAL(core.BasicModel):
                 assert os.path.exists(save_model_path + model_name + ".zip"), "Model {} doesn't exist".format(
                     model_name)
 
-                rospy.logwarn("Loading model: " + model_name)
+                rclpy.logging.get_logger().info("Loading model: " + model_name)
 
                 if use_her or parm_dict["use_HER"]:
                     # HER parameters
@@ -155,13 +156,13 @@ class DDPG_GOAL(core.BasicModel):
                                                              seed=model_seed)
 
                 if os.path.exists(save_model_path + model_name + "_replay_buffer.pkl"):
-                    rospy.logwarn("Loading replay buffer")
+                    rclpy.logging.get_logger().info("Loading replay buffer")
                     self.model.load_replay_buffer(save_model_path + model_name + "_replay_buffer")
                 else:
-                    rospy.logwarn("No replay buffer found")
+                    rclpy.logging.get_logger().info("No replay buffer found")
 
             else:  # Create a new model
-                rospy.logwarn("Creating new model")
+                rclpy.logging.get_logger().info("Creating new model")
 
                 if use_her or parm_dict["use_HER"]:
                     # HER parameters
@@ -244,7 +245,7 @@ class DDPG_GOAL(core.BasicModel):
             config_file_pkg = "sb3_ros_support"
             config_filename = "ddpg_goal.yaml"
 
-            rospy.logwarn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
+            rclpy.logging.get_logger().info("Using default config file: " + config_filename + " from package: " + config_file_pkg)
 
         elif model_pkg is not None and config_filename is not None and config_file_pkg is None:
             config_file_pkg = model_pkg

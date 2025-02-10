@@ -2,18 +2,20 @@
 
 import os
 import stable_baselines3
+import rclpy.logging
 from sb3_ros_support import core
 from sb3_ros_support.utils import yaml_utils
 
 # ROS packages required
-import rospy
+import rclpy
 import rospkg
 
-class DDPG(core.BasicModel):
-    """
-    Deep Deterministic Policy Gradient (DDPG) algorithm.
 
-    Paper: https://arxiv.org/abs/1509.02971
+class A2C(core.BasicModel):
+    """
+    Advantage Actor-Critic (A2C) algorithm.
+
+    Paper: https://arxiv.org/abs/1602.01783
     """
 
     def __init__(self, env, save_model_path, log_path, model_pkg_path=None, load_trained=False,
@@ -31,8 +33,8 @@ class DDPG(core.BasicModel):
             abs_config_path (str): The absolute path to the config file. Required if config_file_pkg and config_filename are not provided.
         """
 
-        rospy.loginfo("Init DDPG Policy")
-        print("Init DDPG Policy")
+        rclpy.logging.get_logger().info("Init A2C Policy")
+        print("Init A2C Policy")
 
         # --- Set the environment
         self.env = env
@@ -69,57 +71,70 @@ class DDPG(core.BasicModel):
                                          file_abs_path=abs_config_path)
 
         # --- Init superclass
-        super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained)
+        super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained, action_noise=False)
 
         if load_trained:
-            rospy.logwarn("Loading trained model")
-            self.model = stable_baselines3.DDPG.load(load_model_path, env=env)
+            rclpy.logging.get_logger().info("Loading trained model")
+            self.model = stable_baselines3.A2C.load(load_model_path, env=env)
         else:
-            # --- DDPG model parameters
-            model_learning_rate = parm_dict["ddpg_params"]["learning_rate"]
-            model_buffer_size = parm_dict["ddpg_params"]["buffer_size"]
-            model_learning_starts = parm_dict["ddpg_params"]["learning_starts"]
-            model_batch_size = parm_dict["ddpg_params"]["batch_size"]
-            model_tau = parm_dict["ddpg_params"]["tau"]
-            model_gamma = parm_dict["ddpg_params"]["gamma"]
-            model_gradient_steps = parm_dict["ddpg_params"]["gradient_steps"]
-            model_train_freq_freq = parm_dict["ddpg_params"]["train_freq"]["freq"]
-            model_train_freq_unit = parm_dict["ddpg_params"]["train_freq"]["unit"]
-            model_seed = parm_dict["ddpg_params"]["seed"]
+            # --- SDE for A2C
+            if parm_dict["use_sde"]:
+                model_sde = True
+                model_sde_sample_freq = parm_dict["sde_params"]["sde_sample_freq"]
+                self.action_noise = None
+            else:
+                model_sde = False
+                model_sde_sample_freq = -1
+
+            # --- A2C model parameters
+            model_learning_rate = parm_dict["a2c_params"]["learning_rate"]
+            model_n_steps = parm_dict["a2c_params"]["n_steps"]
+            model_gamma = parm_dict["a2c_params"]["gamma"]
+            model_gae_lambda = parm_dict["a2c_params"]["gae_lambda"]
+            model_ent_coef = parm_dict["a2c_params"]["ent_coef"]
+            model_vf_coef = parm_dict["a2c_params"]["vf_coef"]
+            model_max_grad_norm = parm_dict["a2c_params"]["max_grad_norm"]
+            model_use_rms_prop = parm_dict["a2c_params"]["use_rms_prop"]
+            model_rms_prop_eps = parm_dict["a2c_params"]["rms_prop_eps"]
+            model_norm_advant = parm_dict["a2c_params"]["normalize_advantage"]
+            model_seed = parm_dict["a2c_params"]["seed"]
 
             # --- Create or load model
             if parm_dict["load_model"]:  # Load model
                 model_name = parm_dict["model_name"]
+
                 assert os.path.exists(save_model_path + model_name + ".zip"), "Model {} doesn't exist".format(
                     model_name)
+                rclpy.logging.get_logger().info("Loading model: " + model_name)
 
-                rospy.logwarn("Loading model: " + model_name)
-                self.model = stable_baselines3.DDPG.load(save_model_path + model_name, env=self.env, verbose=1,
-                                                         action_noise=self.action_noise,
-                                                         learning_rate=model_learning_rate,
-                                                         buffer_size=model_buffer_size,
-                                                         learning_starts=model_learning_starts,
-                                                         batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
-                                                         gradient_steps=model_gradient_steps,
-                                                         train_freq=(model_train_freq_freq, model_train_freq_unit),
-                                                         seed=model_seed)
+                self.model = stable_baselines3.A2C.load(save_model_path + model_name, env=env, verbose=1,
+                                                        learning_rate=model_learning_rate,
+                                                        n_steps=model_n_steps, gamma=model_gamma,
+                                                        gae_lambda=model_gae_lambda, ent_coef=model_ent_coef,
+                                                        vf_coef=model_vf_coef, max_grad_norm=model_max_grad_norm,
+                                                        use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
+                                                        use_rms_prop=model_use_rms_prop,
+                                                        rms_prop_eps=model_rms_prop_eps,
+                                                        normalize_advantage=model_norm_advant,
+                                                        seed=model_seed)
 
                 if os.path.exists(save_model_path + model_name + "_replay_buffer.pkl"):
-                    rospy.logwarn("Loading replay buffer")
+                    rclpy.logging.get_logger().warn("Loading replay buffer")
                     self.model.load_replay_buffer(save_model_path + model_name + "_replay_buffer")
                 else:
-                    rospy.logwarn("No replay buffer found")
+                    rclpy.logging.get_logger().warn("No replay buffer found")
 
-            else:  # Create a new model
-                rospy.logwarn("Creating new model")
-                self.model = stable_baselines3.DDPG("MlpPolicy", self.env, verbose=1, action_noise=self.action_noise,
-                                                    learning_rate=model_learning_rate, buffer_size=model_buffer_size,
-                                                    learning_starts=model_learning_starts,
-                                                    batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
-                                                    gradient_steps=model_gradient_steps,
-                                                    policy_kwargs=self.policy_kwargs,
-                                                    train_freq=(model_train_freq_freq, model_train_freq_unit),
-                                                    seed=model_seed)
+            else:  # Create new model
+                rclpy.logging.get_logger().warn("Creating new model")
+                self.model = stable_baselines3.A2C("MlpPolicy", env, verbose=1, policy_kwargs=self.policy_kwargs,
+                                                   learning_rate=model_learning_rate, n_steps=model_n_steps,
+                                                   gamma=model_gamma,
+                                                   gae_lambda=model_gae_lambda, ent_coef=model_ent_coef,
+                                                   vf_coef=model_vf_coef, max_grad_norm=model_max_grad_norm,
+                                                   use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
+                                                   use_rms_prop=model_use_rms_prop, rms_prop_eps=model_rms_prop_eps,
+                                                   normalize_advantage=model_norm_advant,
+                                                   seed=model_seed)
 
             # --- Logger
             self.set_model_logger()
@@ -143,14 +158,14 @@ class DDPG(core.BasicModel):
 
         if config_file_pkg is None and config_filename is None and abs_config_path is None:
             config_file_pkg = "sb3_ros_support"
-            config_filename = "ddpg.yaml"
+            config_filename = "a2c.yaml"
 
-            rospy.logwarn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
+            rclpy.logging.get_logger().warn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
 
         elif model_pkg is not None and config_filename is not None and config_file_pkg is None:
             config_file_pkg = model_pkg
 
-        model = DDPG(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
+        model = A2C(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
                     load_trained=True, load_model_path=model_path, config_file_pkg=config_file_pkg,
                     config_filename=config_filename, abs_config_path=abs_config_path)
 

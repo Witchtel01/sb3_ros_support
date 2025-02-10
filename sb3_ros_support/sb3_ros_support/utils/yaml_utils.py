@@ -1,10 +1,12 @@
 #!/bin/python3
 
 import rospkg
-import rospy
+import rclpy
 import os
 import yaml
 from yaml.loader import SafeLoader
+
+import rclpy.logging
 
 
 # load the yaml file and return dict that contain all the parameters
@@ -26,9 +28,9 @@ def load_yaml(pkg_name=None, file_name=None, file_abs_path=None) -> dict:
         rospack = rospkg.RosPack()
         try:
             pkg_path = rospack.get_path(pkg_name)
-            rospy.logdebug(f"Package {pkg_name} located!.")
+            rclpy.logging.get_logger().debug(f"Package {pkg_name} located!.")
         except rospkg.common.ResourceNotFound:
-            rospy.logerr(f"Package {pkg_name} not found!.")
+            rclpy.logging.get_logger().error(f"Package {pkg_name} not found!.")
             raise rospkg.common.ResourceNotFound(f"Package {pkg_name} not found!.")
 
         file_abs_path = pkg_path + "/config/" + file_name

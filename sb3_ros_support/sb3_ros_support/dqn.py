@@ -2,19 +2,20 @@
 
 import os
 import stable_baselines3
+import rclpy.logging
 from sb3_ros_support import core
 from sb3_ros_support.utils import yaml_utils
 
 # ROS packages required
-import rospy
+import rclpy
 import rospkg
 
 
-class TD3(core.BasicModel):
+class DQN(core.BasicModel):
     """
-    Twin Delayed DDPG (TD3) algorithm.
+    Deep Q Network (DQN) algorithm.
 
-    Paper: https://arxiv.org/abs/1802.09477
+    Paper: https://arxiv.org/abs/1312.5602
     """
 
     def __init__(self, env, save_model_path, log_path, model_pkg_path=None, load_trained=False,
@@ -32,8 +33,8 @@ class TD3(core.BasicModel):
             abs_config_path (str): The absolute path to the config file. Required if config_file_pkg and config_filename are not provided.
         """
 
-        rospy.loginfo("Init TD3 Policy")
-        print("Init TD3 Policy")
+        rclpy.logging.get_logger().info("Init DQN Policy")
+        print("Init DQN Policy")
 
         # --- Set the environment
         self.env = env
@@ -70,27 +71,28 @@ class TD3(core.BasicModel):
                                          file_abs_path=abs_config_path)
 
         # --- Init superclass
-        super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained)
+        super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained, action_noise=False)
 
         if load_trained:
-            rospy.logwarn("Loading trained model")
-            self.model = stable_baselines3.TD3.load(load_model_path, env=env)
+            rclpy.logging.get_logger().info("Loading trained model")
+            self.model = stable_baselines3.DQN.load(load_model_path, env=env)
         else:
-
-            # --- TD3 model parameters
-            model_learning_rate = parm_dict["td3_params"]["learning_rate"]
-            model_buffer_size = parm_dict["td3_params"]["buffer_size"]
-            model_learning_starts = parm_dict["td3_params"]["learning_starts"]
-            model_batch_size = parm_dict["td3_params"]["batch_size"]
-            model_tau = parm_dict["td3_params"]["tau"]
-            model_gamma = parm_dict["td3_params"]["gamma"]
-            model_gradient_steps = parm_dict["td3_params"]["gradient_steps"]
-            model_train_freq_freq = parm_dict["td3_params"]["train_freq"]["freq"]
-            model_train_freq_unit = parm_dict["td3_params"]["train_freq"]["unit"]
-            model_policy_delay = parm_dict["td3_params"]["policy_delay"]
-            model_target_policy_noise = parm_dict["td3_params"]["target_policy_noise"]
-            model_target_noise_clip = parm_dict["td3_params"]["target_noise_clip"]
-            model_seed = parm_dict["td3_params"]["seed"]
+            # --- DQN model parameters
+            model_learning_rate = parm_dict["dqn_params"]["learning_rate"]
+            model_buffer_size = parm_dict["dqn_params"]["buffer_size"]
+            model_learning_starts = parm_dict["dqn_params"]["learning_starts"]
+            model_batch_size = parm_dict["dqn_params"]["batch_size"]
+            model_tau = parm_dict["dqn_params"]["tau"]
+            model_gamma = parm_dict["dqn_params"]["gamma"]
+            model_gradient_steps = parm_dict["dqn_params"]["gradient_steps"]
+            model_train_freq_freq = parm_dict["dqn_params"]["train_freq"]["freq"]
+            model_train_freq_unit = parm_dict["dqn_params"]["train_freq"]["unit"]
+            model_target_update_interval = parm_dict["dqn_params"]["target_update_interval"]
+            model_exploration_fraction = parm_dict["dqn_params"]["exploration_fraction"]
+            model_exploration_initial_eps = parm_dict["dqn_params"]["exploration_initial_eps"]
+            model_exploration_final_eps = parm_dict["dqn_params"]["exploration_final_eps"]
+            model_max_grad_norm = parm_dict["dqn_params"]["max_grad_norm"]
+            model_seed = parm_dict["dqn_params"]["seed"]
 
             # --- Create or load model
             if parm_dict["load_model"]:  # Load model
@@ -98,44 +100,47 @@ class TD3(core.BasicModel):
 
                 assert os.path.exists(save_model_path + model_name + ".zip"), "Model {} doesn't exist".format(
                     model_name)
-                rospy.logwarn("Loading model: " + model_name)
+                rclpy.logging.get_logger().info("Loading model: " + model_name)
 
-                self.model = stable_baselines3.TD3.load(save_model_path + model_name, env=env, verbose=1,
-                                                        action_noise=self.action_noise,
+                self.model = stable_baselines3.DQN.load(save_model_path + model_name, env=env, verbose=1,
                                                         learning_rate=model_learning_rate,
                                                         buffer_size=model_buffer_size,
                                                         learning_starts=model_learning_starts,
-                                                        batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
+                                                        batch_size=model_batch_size,
+                                                        tau=model_tau, gamma=model_gamma,
                                                         gradient_steps=model_gradient_steps,
-                                                        policy_delay=model_policy_delay,
-                                                        target_policy_noise=model_target_policy_noise,
-                                                        target_noise_clip=model_target_noise_clip,
+                                                        target_update_interval=model_target_update_interval,
+                                                        exploration_fraction=model_exploration_fraction,
+                                                        exploration_initial_eps=model_exploration_initial_eps,
+                                                        exploration_final_eps=model_exploration_final_eps,
+                                                        max_grad_norm=model_max_grad_norm,
                                                         train_freq=(model_train_freq_freq, model_train_freq_unit),
                                                         seed=model_seed)
 
                 if os.path.exists(save_model_path + model_name + "_replay_buffer.pkl"):
-                    rospy.logwarn("Loading replay buffer")
+                    rclpy.logging.get_logger().info("Loading replay buffer")
                     self.model.load_replay_buffer(save_model_path + model_name + "_replay_buffer")
                 else:
-                    rospy.logwarn("No replay buffer found")
+                    rclpy.logging.get_logger().info("No replay buffer found")
 
             else:  # Create a new model
-                rospy.logwarn("Creating new model")
+                rclpy.logging.get_logger().info("Creating new model")
 
-                self.model = stable_baselines3.TD3("MlpPolicy", env, verbose=1, action_noise=self.action_noise,
-                                                   learning_rate=model_learning_rate, buffer_size=model_buffer_size,
-                                                   learning_starts=model_learning_starts,
-                                                   batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
+                self.model = stable_baselines3.DQN("MlpPolicy", env, verbose=1, learning_rate=model_learning_rate,
+                                                   buffer_size=model_buffer_size, learning_starts=model_learning_starts,
+                                                   batch_size=model_batch_size,
+                                                   tau=model_tau, gamma=model_gamma,
                                                    gradient_steps=model_gradient_steps,
-                                                   policy_kwargs=self.policy_kwargs, policy_delay=model_policy_delay,
-                                                   target_policy_noise=model_target_policy_noise,
-                                                   target_noise_clip=model_target_noise_clip,
+                                                   target_update_interval=model_target_update_interval,
+                                                   exploration_fraction=model_exploration_fraction,
+                                                   exploration_initial_eps=model_exploration_initial_eps,
+                                                   exploration_final_eps=model_exploration_final_eps,
+                                                   max_grad_norm=model_max_grad_norm, policy_kwargs=self.policy_kwargs,
                                                    train_freq=(model_train_freq_freq, model_train_freq_unit),
                                                    seed=model_seed)
 
             # --- Logger
             self.set_model_logger()
-
 
     @staticmethod
     def load_trained_model(model_path, model_pkg=None, env=None, config_file_pkg=None, config_filename=None,
@@ -156,14 +161,14 @@ class TD3(core.BasicModel):
 
         if config_file_pkg is None and config_filename is None and abs_config_path is None:
             config_file_pkg = "sb3_ros_support"
-            config_filename = "td3.yaml"
+            config_filename = "dqn.yaml"
 
-            rospy.logwarn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
+            rclpy.logging.get_logger().info("Using default config file: " + config_filename + " from package: " + config_file_pkg)
 
         elif model_pkg is not None and config_filename is not None and config_file_pkg is None:
             config_file_pkg = model_pkg
 
-        model = TD3(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
+        model = DQN(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
                     load_trained=True, load_model_path=model_path, config_file_pkg=config_file_pkg,
                     config_filename=config_filename, abs_config_path=abs_config_path)
 

@@ -2,19 +2,21 @@
 
 import os
 import stable_baselines3
+import rclpy.logging
+import rclpy.logging_service
 from sb3_ros_support import core
 from sb3_ros_support.utils import yaml_utils
 
 # ROS packages required
-import rospy
+import rclpy
 import rospkg
 
 
-class SAC(core.BasicModel):
+class TD3(core.BasicModel):
     """
-    Soft Actor-Critic (SAC) algorithm.
+    Twin Delayed DDPG (TD3) algorithm.
 
-    Paper: https://arxiv.org/abs/1801.01290
+    Paper: https://arxiv.org/abs/1802.09477
     """
 
     def __init__(self, env, save_model_path, log_path, model_pkg_path=None, load_trained=False,
@@ -32,8 +34,8 @@ class SAC(core.BasicModel):
             abs_config_path (str): The absolute path to the config file. Required if config_file_pkg and config_filename are not provided.
         """
 
-        rospy.loginfo("Init SAC Policy")
-        print("Init SAC Policy")
+        rclpy.logging.get_logger().info("Init TD3 Policy")
+        print("Init TD3 Policy")
 
         # --- Set the environment
         self.env = env
@@ -73,34 +75,24 @@ class SAC(core.BasicModel):
         super().__init__(env, save_model_path, log_path, parm_dict, load_trained=load_trained)
 
         if load_trained:
-            rospy.logwarn("Loading trained model")
-            self.model = stable_baselines3.SAC.load(load_model_path, env=env)
+            rclpy.logging.get_logger().info("Loading trained model")
+            self.model = stable_baselines3.TD3.load(load_model_path, env=env)
         else:
-            # --- SDE for SAC
-            if parm_dict["use_sde"]:
-                model_sde = True
-                model_sde_sample_freq = parm_dict["sde_params"]["sde_sample_freq"]
-                model_use_sde_at_warmup = parm_dict["sde_params"]["use_sde_at_warmup"]
-                self.action_noise = None
-            else:
-                model_sde = False
-                model_sde_sample_freq = -1
-                model_use_sde_at_warmup = False
 
-            # --- SAC model parameters
-            model_learning_rate = parm_dict["sac_params"]["learning_rate"]
-            model_buffer_size = parm_dict["sac_params"]["buffer_size"]
-            model_learning_starts = parm_dict["sac_params"]["learning_starts"]
-            model_batch_size = parm_dict["sac_params"]["batch_size"]
-            model_tau = parm_dict["sac_params"]["tau"]
-            model_gamma = parm_dict["sac_params"]["gamma"]
-            model_gradient_steps = parm_dict["sac_params"]["gradient_steps"]
-            model_ent_coef = parm_dict["sac_params"]["ent_coef"]
-            model_target_update_interval = parm_dict["sac_params"]["target_update_interval"]
-            model_target_entropy = parm_dict["sac_params"]["target_entropy"]
-            model_train_freq_freq = parm_dict["sac_params"]["train_freq"]["freq"]
-            model_train_freq_unit = parm_dict["sac_params"]["train_freq"]["unit"]
-            model_seed = parm_dict["sac_params"]["seed"]
+            # --- TD3 model parameters
+            model_learning_rate = parm_dict["td3_params"]["learning_rate"]
+            model_buffer_size = parm_dict["td3_params"]["buffer_size"]
+            model_learning_starts = parm_dict["td3_params"]["learning_starts"]
+            model_batch_size = parm_dict["td3_params"]["batch_size"]
+            model_tau = parm_dict["td3_params"]["tau"]
+            model_gamma = parm_dict["td3_params"]["gamma"]
+            model_gradient_steps = parm_dict["td3_params"]["gradient_steps"]
+            model_train_freq_freq = parm_dict["td3_params"]["train_freq"]["freq"]
+            model_train_freq_unit = parm_dict["td3_params"]["train_freq"]["unit"]
+            model_policy_delay = parm_dict["td3_params"]["policy_delay"]
+            model_target_policy_noise = parm_dict["td3_params"]["target_policy_noise"]
+            model_target_noise_clip = parm_dict["td3_params"]["target_noise_clip"]
+            model_seed = parm_dict["td3_params"]["seed"]
 
             # --- Create or load model
             if parm_dict["load_model"]:  # Load model
@@ -108,47 +100,44 @@ class SAC(core.BasicModel):
 
                 assert os.path.exists(save_model_path + model_name + ".zip"), "Model {} doesn't exist".format(
                     model_name)
-                rospy.logwarn("Loading model: " + model_name)
+                rclpy.logging.get_logger().info("Loading model: " + model_name)
 
-                self.model = stable_baselines3.SAC.load(save_model_path + model_name, env=env, verbose=1,
+                self.model = stable_baselines3.TD3.load(save_model_path + model_name, env=env, verbose=1,
                                                         action_noise=self.action_noise,
-                                                        use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
-                                                        use_sde_at_warmup=model_use_sde_at_warmup,
                                                         learning_rate=model_learning_rate,
                                                         buffer_size=model_buffer_size,
                                                         learning_starts=model_learning_starts,
                                                         batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
                                                         gradient_steps=model_gradient_steps,
-                                                        ent_coef=model_ent_coef,
-                                                        target_update_interval=model_target_update_interval,
-                                                        target_entropy=model_target_entropy,
+                                                        policy_delay=model_policy_delay,
+                                                        target_policy_noise=model_target_policy_noise,
+                                                        target_noise_clip=model_target_noise_clip,
                                                         train_freq=(model_train_freq_freq, model_train_freq_unit),
                                                         seed=model_seed)
 
                 if os.path.exists(save_model_path + model_name + "_replay_buffer.pkl"):
-                    rospy.logwarn("Loading replay buffer")
+                    rclpy.logging.get_logger().info("Loading replay buffer")
                     self.model.load_replay_buffer(save_model_path + model_name + "_replay_buffer")
                 else:
-                    rospy.logwarn("No replay buffer found")
+                    rclpy.logging.get_logger().info("No replay buffer found")
 
             else:  # Create a new model
-                rospy.logwarn("Creating new model")
+                rclpy.logging.get_logger().info("Creating new model")
 
-                self.model = stable_baselines3.SAC("MlpPolicy", env, verbose=1, action_noise=self.action_noise,
-                                                   use_sde=model_sde, sde_sample_freq=model_sde_sample_freq,
-                                                   use_sde_at_warmup=model_use_sde_at_warmup,
+                self.model = stable_baselines3.TD3("MlpPolicy", env, verbose=1, action_noise=self.action_noise,
                                                    learning_rate=model_learning_rate, buffer_size=model_buffer_size,
                                                    learning_starts=model_learning_starts,
                                                    batch_size=model_batch_size, tau=model_tau, gamma=model_gamma,
                                                    gradient_steps=model_gradient_steps,
-                                                   policy_kwargs=self.policy_kwargs, ent_coef=model_ent_coef,
-                                                   target_update_interval=model_target_update_interval,
-                                                   target_entropy=model_target_entropy,
+                                                   policy_kwargs=self.policy_kwargs, policy_delay=model_policy_delay,
+                                                   target_policy_noise=model_target_policy_noise,
+                                                   target_noise_clip=model_target_noise_clip,
                                                    train_freq=(model_train_freq_freq, model_train_freq_unit),
                                                    seed=model_seed)
 
             # --- Logger
             self.set_model_logger()
+
 
     @staticmethod
     def load_trained_model(model_path, model_pkg=None, env=None, config_file_pkg=None, config_filename=None,
@@ -169,14 +158,14 @@ class SAC(core.BasicModel):
 
         if config_file_pkg is None and config_filename is None and abs_config_path is None:
             config_file_pkg = "sb3_ros_support"
-            config_filename = "sac.yaml"
+            config_filename = "td3.yaml"
 
-            rospy.logwarn("Using default config file: " + config_filename + " from package: " + config_file_pkg)
+            rclpy.logging.get_logger().info("Using default config file: " + config_filename + " from package: " + config_file_pkg)
 
         elif model_pkg is not None and config_filename is not None and config_file_pkg is None:
             config_file_pkg = model_pkg
 
-        model = SAC(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
+        model = TD3(env=env, save_model_path=model_path, log_path=model_path, model_pkg_path=model_pkg,
                     load_trained=True, load_model_path=model_path, config_file_pkg=config_file_pkg,
                     config_filename=config_filename, abs_config_path=abs_config_path)
 
